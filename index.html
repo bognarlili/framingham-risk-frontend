@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Framingham · Kockázatbecslés</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+<header><strong>♡ Framingham</strong><nav aria-label="Nézetek">
+  <button type="button" data-view="assessment" aria-pressed="true">Egyéni becslés</button>
+  <button type="button" data-view="research" aria-pressed="false">Modelleredmények</button>
+</nav></header>
+<main>
+<section id="assessment">
+  <h1>10 éves koszorúér-betegség kockázata</h1>
+  <div class="layout">
+    <form class="panel" id="patient">
+      <div class="heading"><h2>Páciensadatok</h2><button type="button" id="sample">Példapáciens betöltése</button></div>
+      <div id="fields"></div>
+      <button class="primary" type="submit">Kockázat becslése</button>
+    </form>
+    <div class="results">
+      <p id="status" role="status">Töltsd be a példapácienst a bemutató kipróbálásához.</p>
+      <div id="result" hidden>
+        <section class="panel score">
+          <div class="heading"><h2>Becsült 10 éves kockázat</h2><span id="model"></span></div>
+          <p id="risk"></p>
+        </section>
+        <section class="panel explanation">
+          <h2>Mit jelent ez az eredmény?</h2><p id="summary"></p>
+        </section>
+        <section class="panel">
+          <h2>Mi alakította a becslést?</h2>
+          <p class="muted">− Lefelé mozdította · + Felfelé mozdította</p>
+          <ul id="chart"></ul>
+        </section>
+        <details class="panel">
+          <summary>Összes adat értelmezése</summary>
+          <div class="table-wrap"><table><thead><tr><th>Változó</th><th>Megadott érték</th><th>Értelmezés</th></tr></thead><tbody id="interpretations"></tbody></table></div>
+        </details>
+      </div>
+    </div>
+  </div>
+</section>
+<section id="research" hidden>
+  <h1>Modelleredmények</h1>
+  <div class="panel table-wrap">
+    <table><thead><tr><th>Algoritmus</th><th>Teljes modell</th><th>Glükóz és összkoleszterin nélkül</th></tr></thead>
+    <tbody id="metrics"></tbody></table>
+  </div>
+</section>
+</main>
+<footer>Framingham · Egyetemi kutatási projekt</footer>
+</body>
+</html>
