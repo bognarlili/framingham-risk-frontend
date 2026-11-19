@@ -31,7 +31,16 @@ const form = document.querySelector('#patient');
 const output = document.querySelector('#result');
 const status = document.querySelector('#status');
 const percent = new Intl.NumberFormat('hu-HU', { maximumFractionDigits: 1 });
-const demoScores = { age: 0.68, sysBP: 0.36, BMI: -0.10 };
+// Same origin: Nginx forwards /api to the backend.
+const ASSESSMENT_URL = '/api/assessments';
+const submitButton = form.querySelector('button[type="submit"]');
+
+const demoResult = {
+  model: 'Szemléltető példa',
+  probability: 0.184,
+  summary: 'A példa szerint a koszorúér-betegség becsült esélye 18,4% a következő tíz évben. A becslést leginkább az életkor és a felső vérnyomásérték (138 Hgmm) emelte.',
+  contributions: { age: 0.68, sysBP: 0.36, BMI: -0.10 },
+};
 
 function create(tag, content, className) {
   const node = document.createElement(tag);
@@ -144,28 +153,59 @@ for (const name of ['Logisztikus regresszió', 'EBM', 'XGBoost', 'Random Forest'
   document.querySelector('#metrics').append(row);
 }
 
+// One click: fill in the sample patient and show the illustrative result right away.
 document.querySelector('#sample').addEventListener('click', () => {
   for (const [key, , value] of fields) form.elements[key].value = value;
-  output.hidden = true;
-  status.textContent = 'Példapáciens betöltve.';
+  status.textContent = 'Szemléltető példa – nem valódi modellbecslés.';
+  renderResult(demoResult);
 });
 form.addEventListener('input', () => {
   output.hidden = true;
   status.textContent = 'Az adatok változtak. Indíts új becslést.';
 });
-form.addEventListener('submit', event => {
+
+// JSON body with the dataset field names; every form value is sent as a number.
+function readPatient() {
+  return Object.fromEntries(fields.map(([key]) => [key, Number(form.elements[key].value)]));
+}
+
+// The backend reports field errors by Java name (e.g. sysBp), so match titles case-insensitively.
+function fieldTitle(name) {
+  const field = fields.find(([key]) => key.toLowerCase() === name.toLowerCase());
+  return field ? field[1] : name;
+}
+
+function validationMessage(error) {
+  const details = Object.entries(error?.details ?? {})
+    .map(([name, message]) => `${fieldTitle(name)}: ${message}`);
+  return details.length ? 'Hibás adatok – ' + details.join('; ') : 'Hibás adatok.';
+}
+
+form.addEventListener('submit', async event => {
   event.preventDefault();
   output.hidden = true;
-  const isSample = fields.every(([key, , example]) => Number(form.elements[key].value) === Number(example));
-  if (!isSample) {
-    status.textContent = 'Az egyéni becsléshez modellkapcsolat szükséges. A bemutató a példapácienssel próbálható ki.';
-    return;
+  submitButton.disabled = true;
+  status.textContent = 'Becslés folyamatban…';
+  try {
+    const response = await fetch(ASSESSMENT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(readPatient()),
+    });
+    const body = await response.json().catch(() => null);
+    if (response.status === 400) {
+      status.textContent = validationMessage(body);
+    } else if (!response.ok) {
+      status.textContent = `A szerver hibát jelzett (${response.status}). Próbáld újra később.`;
+    } else if (body.modelStatus === 'UNAVAILABLE') {
+      status.textContent = body.message;
+    } else {
+      status.textContent = 'Modellbecslés';
+      renderResult(body);
+    }
+  } catch {
+    status.textContent = 'A szerver nem érhető el. Ellenőrizd, hogy fut-e a backend.';
+  } finally {
+    submitButton.disabled = false;
   }
-  status.textContent = 'Szemléltető eredmény';
-  renderResult({
-    model: 'EBM · teljes modell',
-    probability: 0.184,
-    summary: 'A példa szerint a koszorúér-betegség becsült esélye 18,4% a következő tíz évben. A becslést leginkább az életkor és a felső vérnyomásérték (138 Hgmm) emelte.',
-    contributions: demoScores,
-  });
 });
