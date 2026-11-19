@@ -4,7 +4,13 @@ const groups = [
   ['Alapadatok', [
     ['age', 'Életkor', 54, 'év', '1'],
     ['male', 'Nem', '0', '', ['Nő', 'Férfi']],
-    ['education', 'Iskolázottsági kategória', '2', '', ['1', '2', '3', '4']],
+    // Framingham codes: 1 some high school, 2 high school/GED, 3 some college/vocational, 4 college.
+    ['education', 'Legmagasabb iskolai végzettség', '2', '', [
+      ['1', 'Alapfokú'],
+      ['2', 'Középfokú (érettségi)'],
+      ['3', 'Szakképzés / megkezdett felsőfokú'],
+      ['4', 'Felsőfokú diploma'],
+    ]],
     ['BMI', 'BMI', 27.4, 'kg/m²', 'any'],
   ]],
   ['Dohányzás és előzmények', [
@@ -65,9 +71,10 @@ function addField(container, [key, title, example, unit, format]) {
   } else {
     const options = Array.isArray(format) ? format : ['Nem', 'Igen'];
     input.add(new Option('Válassz…', ''));
+    // An option is either a label (value = its index) or a [value, label] pair.
     options.forEach((option, index) => {
-      const value = key === 'education' ? option : index;
-      input.add(new Option(option, value));
+      const [value, text] = Array.isArray(option) ? option : [index, option];
+      input.add(new Option(text, value));
     });
   }
 
@@ -137,6 +144,19 @@ for (const [title, list] of groups) {
   document.querySelector('#fields').append(group);
 }
 
+// Cigarettes per day only makes sense for smokers: otherwise locked to 0.
+const smokerInput = form.elements.currentSmoker;
+const cigsInput = form.elements.cigsPerDay;
+function syncSmoking() {
+  const smokes = smokerInput.value === '1';
+  cigsInput.disabled = !smokes;
+  cigsInput.min = smokes ? '1' : '0';
+  if (!smokes) cigsInput.value = 0;
+  else if (cigsInput.value === '0') cigsInput.value = '';
+}
+smokerInput.addEventListener('change', syncSmoking);
+syncSmoking();
+
 for (const button of document.querySelectorAll('[data-view]')) {
   button.addEventListener('click', () => {
     for (const tab of document.querySelectorAll('[data-view]')) {
@@ -156,6 +176,7 @@ for (const name of ['Logisztikus regresszió', 'EBM', 'XGBoost', 'Random Forest'
 // One click: fill in the sample patient and show the illustrative result right away.
 document.querySelector('#sample').addEventListener('click', () => {
   for (const [key, , value] of fields) form.elements[key].value = value;
+  syncSmoking();
   status.textContent = 'Szemléltető példa – nem valódi modellbecslés.';
   renderResult(demoResult);
 });
