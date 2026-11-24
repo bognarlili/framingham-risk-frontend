@@ -40,6 +40,11 @@ const percent = new Intl.NumberFormat('hu-HU', { maximumFractionDigits: 1 });
 // Same origin: Nginx forwards /api to the backend.
 const ASSESSMENT_URL = '/api/assessments';
 const submitButton = form.querySelector('button[type="submit"]');
+// Readable names for the backend's model keys; unknown keys are shown as they are.
+const MODEL_NAMES = {
+  'logistic-regression-full': 'Logisztikus regresszió (teljes)',
+  'logistic-regression-reduced': 'Logisztikus regresszió (glükóz és koleszterin nélkül)',
+};
 
 const demoResult = {
   model: 'Szemléltető példa',
@@ -115,7 +120,7 @@ function renderChart(scores) {
 }
 
 function renderResult(result) {
-  document.querySelector('#model').textContent = result.model;
+  document.querySelector('#model').textContent = MODEL_NAMES[result.model] ?? result.model;
   document.querySelector('#risk').textContent = percent.format(result.probability * 100) + '%';
   document.querySelector('#summary').textContent = result.summary;
   renderChart(result.contributions);
