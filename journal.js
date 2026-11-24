@@ -19,18 +19,33 @@ export function onOpenEntry(handler) {
   openEntry = handler;
 }
 
+/** The newest entries first; null if the user is not logged in. Throws if the request fails. */
+async function fetchEntries(size) {
+  const response = await fetch(`${JOURNAL_URL}?size=${size}`, { headers: await authHeaders() });
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return (await response.json()).content;
+}
+
+/** The user's newest entry, or null if there is none or it cannot be loaded. */
+export async function fetchLatestEntry() {
+  try {
+    return (await fetchEntries(1))?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadJournal() {
   content.hidden = true;
   statusLine.textContent = 'Napló betöltése…';
   let entries;
   try {
-    const response = await fetch(`${JOURNAL_URL}?size=${PAGE_SIZE}`, { headers: await authHeaders() });
-    if (response.status === 401) {
+    entries = await fetchEntries(PAGE_SIZE);
+    if (entries === null) {
       statusLine.textContent = 'Jelentkezz be a naplód megtekintéséhez.';
       return;
     }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    entries = (await response.json()).content; // newest first
   } catch {
     statusLine.textContent = 'A napló most nem tölthető be. Próbáld újra később.';
     return;

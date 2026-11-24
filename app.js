@@ -2,7 +2,7 @@ import {
   authHeaders, initAuth, isAuthAvailable, isLoggedIn, login, logout, onAuthChange, register, userName,
 } from './auth.js';
 import { fieldOptions, fields, groups } from './fields.js';
-import { loadJournal, onOpenEntry } from './journal.js';
+import { fetchLatestEntry, loadJournal, onOpenEntry } from './journal.js';
 import { create, dateTime, formatPercent, modelName, riskSummary } from './ui.js';
 
 const form = document.querySelector('#patient');
@@ -155,7 +155,18 @@ function renderAccount() {
   }
 }
 onAuthChange(renderAccount);
-initAuth();
+initAuth().then(prefillFromJournal);
+
+// A logged-in user starts from their newest journal entry, unless they already began typing.
+let formTouched = false;
+async function prefillFromJournal() {
+  if (!isLoggedIn() || formTouched) return;
+  const latest = await fetchLatestEntry();
+  if (!latest || formTouched) return;
+  fillForm(latest.values);
+  status.textContent = `A legutóbbi naplóbejegyzésed adataival töltöttük ki (${dateTime.format(new Date(latest.createdAt))}). `
+    + 'Módosítsd, ami változott, és indíts új becslést.';
+}
 
 for (const name of ['Logisztikus regresszió', 'EBM', 'XGBoost', 'Random Forest']) {
   const row = create('tr');
@@ -171,6 +182,7 @@ function fillForm(values) {
 
 // One click: fill in the sample patient and show the illustrative result right away.
 document.querySelector('#sample').addEventListener('click', () => {
+  formTouched = true;
   fillForm(Object.fromEntries(fields.map(([key, , example]) => [key, example])));
   status.textContent = 'Szemléltető példa – nem valódi modellbecslés.';
   renderResult(demoResult);
@@ -178,6 +190,7 @@ document.querySelector('#sample').addEventListener('click', () => {
 
 // A journal entry opens in the assessment view: its values in the form, its result beside it.
 onOpenEntry(entry => {
+  formTouched = true;
   fillForm(entry.values);
   showView('assessment');
   status.textContent = `Naplóbejegyzés: ${dateTime.format(new Date(entry.createdAt))}`;
@@ -185,6 +198,7 @@ onOpenEntry(entry => {
 });
 
 form.addEventListener('input', () => {
+  formTouched = true;
   output.hidden = true;
   status.textContent = 'Az adatok változtak. Indíts új becslést.';
 });
