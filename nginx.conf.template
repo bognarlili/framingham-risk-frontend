@@ -42,6 +42,8 @@ server {
     }
 
     location / {
+        # The browser may keep the files but must ask whether they changed (no stale JS/CSS).
+        add_header Cache-Control "no-cache";
         try_files $uri $uri/ /index.html;
     }
 }

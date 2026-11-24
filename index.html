@@ -6,13 +6,14 @@
   <title>Framingham · Kockázatbecslés</title>
   <link rel="icon" type="image/png" href="logo.png">
   <link rel="stylesheet" href="styles.css">
-  <script src="app.js" defer></script>
+  <script type="module" src="app.js"></script>
 </head>
 <body>
 <header><strong><img class="logo" src="logo.png" alt="" width="40" height="40"><span class="brand-name">Framingham</span></strong><nav aria-label="Nézetek">
   <button type="button" data-view="assessment" aria-pressed="true">Egyéni becslés</button>
   <button type="button" data-view="research" aria-pressed="false">Modelleredmények</button>
-</nav></header>
+  <button type="button" data-view="journal" aria-pressed="false" hidden>Naplóm</button>
+</nav><div class="account" id="account" hidden></div></header>
 <main>
 <section id="assessment">
   <h1>10 éves koszorúér-betegség kockázata</h1>
@@ -50,6 +51,26 @@
   <div class="panel table-wrap">
     <table><thead><tr><th>Algoritmus</th><th>Teljes modell</th><th>Glükóz és összkoleszterin nélkül</th></tr></thead>
     <tbody id="metrics"></tbody></table>
+  </div>
+</section>
+<section id="journal" hidden>
+  <h1>Naplóm</h1>
+  <p id="journal-status" role="status"></p>
+  <div id="journal-content" hidden>
+    <section class="panel">
+      <h2>A kockázat alakulása</h2>
+      <div id="trend"></div>
+    </section>
+    <section class="panel" id="change-panel">
+      <h2>Változás az előző bejegyzéshez képest</h2>
+      <p id="change-summary"></p>
+      <ul id="changes" class="changes"></ul>
+    </section>
+    <section class="panel">
+      <h2>Bejegyzések</h2>
+      <div class="table-wrap"><table><thead><tr><th>Dátum</th><th>Kockázat</th><th>Vérnyomás</th><th>Összkoleszterin</th><th>Glükóz</th><th><span class="visually-hidden">Műveletek</span></th></tr></thead>
+      <tbody id="entries"></tbody></table></div>
+    </section>
   </div>
 </section>
 </main>

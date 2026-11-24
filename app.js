@@ -1,50 +1,16 @@
-'use strict';
+import {
+  authHeaders, initAuth, isAuthAvailable, isLoggedIn, login, logout, onAuthChange, register, userName,
+} from './auth.js';
+import { fieldOptions, fields, groups } from './fields.js';
+import { loadJournal, onOpenEntry } from './journal.js';
+import { create, dateTime, formatPercent, modelName, riskSummary } from './ui.js';
 
-const groups = [
-  ['Alapadatok', [
-    ['age', 'Életkor', 54, 'év', '1'],
-    ['male', 'Nem', '0', '', ['Nő', 'Férfi']],
-    // Framingham codes: 1 some high school, 2 high school/GED, 3 some college/vocational, 4 college.
-    ['education', 'Legmagasabb iskolai végzettség', '2', '', [
-      ['1', 'Alapfokú'],
-      ['2', 'Középfokú (érettségi)'],
-      ['3', 'Szakképzés / megkezdett felsőfokú'],
-      ['4', 'Felsőfokú diploma'],
-    ]],
-    ['BMI', 'BMI', 27.4, 'kg/m²', 'any'],
-  ]],
-  ['Dohányzás és előzmények', [
-    ['currentSmoker', 'Jelenleg dohányzik', '0'],
-    ['cigsPerDay', 'Napi cigarettaszám', 0, 'szál/nap', '1'],
-    ['BPMeds', 'Vérnyomáscsökkentőt szed', '0'],
-    ['prevalentStroke', 'Korábbi stroke', '0'],
-    ['prevalentHyp', 'Ismert hipertónia', '0'],
-    ['diabetes', 'Ismert diabétesz', '0'],
-  ]],
-  ['Vérnyomás és pulzus', [
-    ['sysBP', 'Szisztolés vérnyomás', 138, 'Hgmm', 'any'],
-    ['diaBP', 'Diasztolés vérnyomás', 86, 'Hgmm', 'any'],
-    ['heartRate', 'Pulzus', 76, 'ütés/perc', 'any'],
-  ]],
-  ['Laborértékek', [
-    ['totChol', 'Összkoleszterin', 6.0, 'mmol/L', 'any'],
-    ['glucose', 'Glükóz', 5.1, 'mmol/L', 'any'],
-  ]],
-];
-
-const fields = groups.flatMap(([, list]) => list);
 const form = document.querySelector('#patient');
 const output = document.querySelector('#result');
 const status = document.querySelector('#status');
-const percent = new Intl.NumberFormat('hu-HU', { maximumFractionDigits: 1 });
 // Same origin: Nginx forwards /api to the backend.
 const ASSESSMENT_URL = '/api/assessments';
 const submitButton = form.querySelector('button[type="submit"]');
-// Readable names for the backend's model keys; unknown keys are shown as they are.
-const MODEL_NAMES = {
-  'logistic-regression-full': 'Logisztikus regresszió (teljes)',
-  'logistic-regression-reduced': 'Logisztikus regresszió (glükóz és koleszterin nélkül)',
-};
 
 const demoResult = {
   model: 'Szemléltető példa',
@@ -53,34 +19,24 @@ const demoResult = {
   contributions: { age: 0.68, sysBP: 0.36, BMI: -0.10 },
 };
 
-function create(tag, content, className) {
-  const node = document.createElement(tag);
-  if (content !== undefined) node.textContent = content;
-  if (className) node.className = className;
-  return node;
-}
-
-function addField(container, [key, title, example, unit, format]) {
+function addField(container, field) {
+  const [key, title, , unit, format] = field;
   const row = create('div', undefined, 'field');
   const label = create('label', title);
   const control = create('div', undefined, 'control');
   label.htmlFor = key;
-  const input = create(typeof example === 'number' ? 'input' : 'select');
+  const options = fieldOptions(field);
+  const input = create(options ? 'select' : 'input');
   input.id = input.name = key;
   input.required = true;
 
-  if (input.tagName === 'INPUT') {
+  if (options) {
+    input.add(new Option('Válassz…', ''));
+    options.forEach(([value, text]) => input.add(new Option(text, value)));
+  } else {
     input.type = 'number';
     input.min = '0';
     input.step = format;
-  } else {
-    const options = Array.isArray(format) ? format : ['Nem', 'Igen'];
-    input.add(new Option('Válassz…', ''));
-    // An option is either a label (value = its index) or a [value, label] pair.
-    options.forEach((option, index) => {
-      const [value, text] = Array.isArray(option) ? option : [index, option];
-      input.add(new Option(text, value));
-    });
   }
 
   control.append(input);
@@ -120,8 +76,8 @@ function renderChart(scores) {
 }
 
 function renderResult(result) {
-  document.querySelector('#model').textContent = MODEL_NAMES[result.model] ?? result.model;
-  document.querySelector('#risk').textContent = percent.format(result.probability * 100) + '%';
+  document.querySelector('#model').textContent = modelName(result.model);
+  document.querySelector('#risk').textContent = formatPercent(result.probability);
   document.querySelector('#summary').textContent = result.summary;
   renderChart(result.contributions);
   const body = document.querySelector('#interpretations');
@@ -134,8 +90,7 @@ function renderResult(result) {
       score < 0 ? 'Lefelé mozdította a becslést' :
       score === 0 ? 'Nulla hozzájárulás' : 'Nincs megjelenített hozzájárulás';
     const row = create('tr');
-    row.append(create('th', title), create('td', [value, unit].filter(Boolean).join(' ')),
-      create('td', result.interpretations?.[key] || direction));
+    row.append(create('th', title), create('td', [value, unit].filter(Boolean).join(' ')), create('td', direction));
     row.firstChild.scope = 'row';
     body.append(row);
   }
@@ -162,15 +117,46 @@ function syncSmoking() {
 smokerInput.addEventListener('change', syncSmoking);
 syncSmoking();
 
-for (const button of document.querySelectorAll('[data-view]')) {
-  button.addEventListener('click', () => {
-    for (const tab of document.querySelectorAll('[data-view]')) {
-      const active = tab === button;
-      tab.setAttribute('aria-pressed', active);
-      document.getElementById(tab.dataset.view).hidden = !active;
-    }
-  });
+// Views: one section per nav button (data-view = section id).
+const viewButtons = document.querySelectorAll('[data-view]');
+let currentView = 'assessment';
+function showView(name) {
+  currentView = name;
+  for (const tab of viewButtons) {
+    const active = tab.dataset.view === name;
+    tab.setAttribute('aria-pressed', active);
+    document.getElementById(tab.dataset.view).hidden = !active;
+  }
+  window.scrollTo({ top: 0 });
+  if (name === 'journal') loadJournal();
 }
+for (const button of viewButtons) {
+  button.addEventListener('click', () => showView(button.dataset.view));
+}
+
+// Header: login/registration for guests, name and logout for logged-in users.
+function renderAccount() {
+  const account = document.querySelector('#account');
+  account.hidden = !isAuthAvailable();
+  document.querySelector('[data-view="journal"]').hidden = !isLoggedIn();
+  if (!isLoggedIn() && currentView === 'journal') showView('assessment');
+  if (isLoggedIn()) {
+    const logoutButton = create('button', 'Kijelentkezés');
+    logoutButton.type = 'button';
+    logoutButton.addEventListener('click', logout);
+    account.replaceChildren(create('span', userName(), 'user-name'), logoutButton);
+  } else {
+    const loginButton = create('button', 'Bejelentkezés');
+    const registerButton = create('button', 'Regisztráció');
+    loginButton.type = registerButton.type = 'button';
+    loginButton.addEventListener('click', login);
+    registerButton.addEventListener('click', register);
+    account.replaceChildren(loginButton, registerButton);
+  }
+}
+onAuthChange(renderAccount);
+initAuth();
+
 for (const name of ['Logisztikus regresszió', 'EBM', 'XGBoost', 'Random Forest']) {
   const row = create('tr');
   row.append(create('th', name), create('td', 'Tesztadatokra vár'), create('td', 'Tesztadatokra vár'));
@@ -178,13 +164,26 @@ for (const name of ['Logisztikus regresszió', 'EBM', 'XGBoost', 'Random Forest'
   document.querySelector('#metrics').append(row);
 }
 
+function fillForm(values) {
+  for (const [key] of fields) form.elements[key].value = values[key] ?? '';
+  syncSmoking();
+}
+
 // One click: fill in the sample patient and show the illustrative result right away.
 document.querySelector('#sample').addEventListener('click', () => {
-  for (const [key, , value] of fields) form.elements[key].value = value;
-  syncSmoking();
+  fillForm(Object.fromEntries(fields.map(([key, , example]) => [key, example])));
   status.textContent = 'Szemléltető példa – nem valódi modellbecslés.';
   renderResult(demoResult);
 });
+
+// A journal entry opens in the assessment view: its values in the form, its result beside it.
+onOpenEntry(entry => {
+  fillForm(entry.values);
+  showView('assessment');
+  status.textContent = `Naplóbejegyzés: ${dateTime.format(new Date(entry.createdAt))}`;
+  renderResult({ ...entry, summary: riskSummary(entry.probability) });
+});
+
 form.addEventListener('input', () => {
   output.hidden = true;
   status.textContent = 'Az adatok változtak. Indíts új becslést.';
@@ -215,18 +214,22 @@ form.addEventListener('submit', async event => {
   try {
     const response = await fetch(ASSESSMENT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...await authHeaders() },
       body: JSON.stringify(readPatient()),
     });
     const body = await response.json().catch(() => null);
     if (response.status === 400) {
       status.textContent = validationMessage(body);
+    } else if (response.status === 401) {
+      status.textContent = 'A bejelentkezésed lejárt. Jelentkezz be újra, vagy frissítsd az oldalt.';
     } else if (!response.ok) {
       status.textContent = `A szerver hibát jelzett (${response.status}). Próbáld újra később.`;
     } else if (body.modelStatus === 'UNAVAILABLE') {
       status.textContent = body.message;
     } else {
-      status.textContent = 'Modellbecslés';
+      status.textContent = body.saved ? 'Modellbecslés – elmentve a naplódba.'
+        : isAuthAvailable() ? 'Modellbecslés – vendégként nem mentjük. Jelentkezz be, ha naplózni szeretnéd.'
+        : 'Modellbecslés';
       renderResult(body);
     }
   } catch {
